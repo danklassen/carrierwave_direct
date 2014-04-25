@@ -453,6 +453,9 @@ describe CarrierWaveDirect::ActiveRecord do
           end
 
           it "should be valid" do
+            p "======================="
+            p subject.valid?
+            p subject.errors.full_messages
             subject.should be_valid
           end
         end
