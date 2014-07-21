@@ -255,14 +255,27 @@ describe CarrierWaveDirect::Uploader do
 
       context "and the model's remote url contains escape characters" do
         before do
-            subject.key = nil
-            allow(subject).to receive(:present?).and_return(:true)
-            allow(subject).to receive(:url).and_return("http://anyurl.com/any_path/video_dir/filename ()+[]2.avi")
+          subject.key = nil
+          allow(subject).to receive(:present?).and_return(:true)
+          allow(subject).to receive(:url).and_return("http://anyurl.com/any_path/video_dir/filename ()+[]2.avi")
         end
 
         it "should be escaped and replaced with non whitespace characters" do
-            expect(subject.key).to match /filename%20%28%29%2B%5B%5D2.avi$/
+          expect(subject.key).to match /filename%20%28%29%2B%5B%5D2.avi/
         end
+      end
+
+      context "and the model's remote url contains already escaped characters" do
+        before do
+          subject.key = nil
+          allow(subject).to receive(:present?).and_return(:true)
+          allow(subject).to receive(:url).and_return("http://anyurl.com/any_path/video_dir/filename%20%28%29%2B%5B%5D2.avi")
+        end
+
+        it "should not double escape already escaped characters" do
+          expect(subject.key).to match /filename%20%28%29%2B%5B%5D2.avi/
+        end
+
       end
 
       context "and the model's remote #{sample(:mounted_as)} url is blank" do
@@ -298,6 +311,16 @@ describe CarrierWaveDirect::Uploader do
 
     it "should not contain any new lines" do
       expect(subject.policy).to_not include("\n")
+    end
+
+    it "should be cached" do
+      Timecop.freeze(Time.now) do
+        @policy_now = subject.policy
+      end
+      Timecop.freeze(1.second.from_now) do
+        @policy_later = subject.policy
+      end
+      expect(@policy_later).to eql @policy_now
     end
 
     context "expiration" do
@@ -434,6 +457,20 @@ describe CarrierWaveDirect::Uploader do
           end
         end
       end
+    end
+  end
+
+  describe "clear_policy!" do
+    it "should reset the cached policy string" do
+      Timecop.freeze(Time.now) do
+        @policy_now = subject.policy
+      end
+      subject.clear_policy!
+
+      Timecop.freeze(1.second.from_now) do
+        @policy_after_reset = subject.policy
+      end
+      expect(@policy_after_reset).not_to eql @policy_now
     end
   end
 

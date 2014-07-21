@@ -34,29 +34,11 @@ module CarrierWaveDirect
       options[:min_file_size] ||= min_file_size
       options[:max_file_size] ||= max_file_size
 
-      conditions = [
-        ["starts-with", "$utf8", ""],
-        ["starts-with", "$key", key.sub(/#{Regexp.escape(FILENAME_WILDCARD)}\z/, "")]
-      ]
+      @policy ||= generate_policy(options)
+    end
 
-      conditions << ["starts-with", "$Content-Type", ""] if will_include_content_type
-      conditions << {"bucket" => fog_directory}
-      conditions << {"acl" => acl}
-
-      if use_action_status
-        conditions << {"success_action_status" => success_action_status}
-      else
-        conditions << ["starts-with", "$success_action_redirect", success_action_redirect]
-      end
-
-      conditions << ["content-length-range", options[:min_file_size], options[:max_file_size]]
-
-      Base64.encode64(
-        {
-          'expiration' => Time.now.utc + options[:expiration],
-          'conditions' => conditions
-        }.to_json
-      ).gsub("\n","")
+    def clear_policy!
+      @policy = nil
     end
 
     def signature
@@ -79,7 +61,7 @@ module CarrierWaveDirect
     def key
       return @key if @key.present?
       if present?
-        self.key = URI.parse(URI.encode(url, " []+()")).path[1 .. -1] # explicitly set key
+        self.key = URI.parse(encoded_url).path[1 .. -1] # explicitly set key
       else
         @key = "#{store_dir}/#{guid}/#{FILENAME_WILDCARD}"
       end
@@ -125,6 +107,10 @@ module CarrierWaveDirect
 
     private
 
+    def encoded_url
+      URI.encode(URI.decode(url), " []+()")
+    end
+
     def key_from_file(fname)
       new_key_parts = key.split("/")
       new_key_parts.pop
@@ -144,6 +130,32 @@ module CarrierWaveDirect
     def full_filename(for_file)
       extname = File.extname(for_file)
       [for_file.chomp(extname), version_name].compact.join('_') << extname
+    end
+
+    def generate_policy(options)
+      conditions = [
+        ["starts-with", "$utf8", ""],
+        ["starts-with", "$key", key.sub(/#{Regexp.escape(FILENAME_WILDCARD)}\z/, "")]
+      ]
+
+      conditions << ["starts-with", "$Content-Type", ""] if will_include_content_type
+      conditions << {"bucket" => fog_directory}
+      conditions << {"acl" => acl}
+
+      if use_action_status
+        conditions << {"success_action_status" => success_action_status}
+      else
+        conditions << {"success_action_redirect" => success_action_redirect}
+      end
+
+      conditions << ["content-length-range", options[:min_file_size], options[:max_file_size]]
+
+      Base64.encode64(
+        {
+          'expiration' => Time.now.utc + options[:expiration],
+          'conditions' => conditions
+        }.to_json
+      ).gsub("\n","")
     end
   end
 end
