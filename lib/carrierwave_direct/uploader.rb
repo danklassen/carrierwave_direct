@@ -108,7 +108,7 @@ module CarrierWaveDirect
     private
 
     def encoded_url
-      URI.encode(URI.decode(url), " []+()")
+      URI.encode(URI.decode(url), " []+()#")
     end
 
     def key_from_file(fname)
